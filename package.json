@@ -1,0 +1,18 @@
+{
+  "name": "agentpass",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AgentPass — Groq-powered Web3 agent brain (mocked tools for development).",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node index.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "groq-sdk": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
