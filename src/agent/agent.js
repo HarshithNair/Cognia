@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk'
+import { readTextRecord } from '../utils/ensRecords.js'
 
 const MAX_ITERATIONS = 5
 // Default: llama3-70b-8192 was specified in the hackathon brief but has been decommissioned.
@@ -6,7 +7,7 @@ const MAX_ITERATIONS = 5
 // Override with GROQ_MODEL env var if needed.
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
-const TOOL_DEFINITIONS = [
+const FALLBACK_TOOLS = [
   {
     type: 'function',
     function: {
@@ -38,6 +39,22 @@ const TOOL_DEFINITIONS = [
   },
 ]
 
+async function loadTools() {
+  const raw = await readTextRecord("cognia.eth", "tools.agentpass");
+  if (!raw) {
+    console.warn("[AgentPass] No tool record found on cognia.eth, falling back to defaults");
+    return FALLBACK_TOOLS;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    console.log("[AgentPass] Tools loaded from cognia.eth ENS record");
+    return parsed;
+  } catch {
+    console.warn("[AgentPass] Failed to parse tool record, falling back to defaults");
+    return FALLBACK_TOOLS;
+  }
+}
+
 /**
  * runAgent(userMessage, tools)
  * Takes a user message + tool functions and returns an execution trace array of steps.
@@ -50,6 +67,7 @@ export async function runAgent(userMessage, tools) {
 
   const client = new Groq({ apiKey })
   const steps = [{ type: 'thinking', content: `User: ${userMessage}` }]
+  const toolSchema = await loadTools()
 
   const messages = [
     {
@@ -67,7 +85,7 @@ export async function runAgent(userMessage, tools) {
       response = await client.chat.completions.create({
         model: GROQ_MODEL,
         messages,
-        tools: TOOL_DEFINITIONS,
+        tools: toolSchema,
         tool_choice: 'auto',
       })
     } catch (err) {
@@ -105,7 +123,15 @@ export async function runAgent(userMessage, tools) {
           if (toolName === 'resolve_ens') {
             toolResult = await tools.resolve_ens(args.name)
           } else if (toolName === 'send_via_keeperhub') {
-            toolResult = await tools.send_via_keeperhub(args.to, args.amount)
+            return {
+              status: "awaiting_confirmation",
+              intent: {
+                type: "send_eth",
+                to: args.to,
+                amount: args.amount,
+                chain: "Sepolia"
+              }
+            };
           } else {
             toolResult = `Unknown tool: ${toolName}`
           }

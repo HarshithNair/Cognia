@@ -9,7 +9,8 @@
     "test": "node test/ensTest.js && node test/keeperhubTest.js",
     "test:ens": "node test/ensTest.js",
     "test:keeperhub": "node test/keeperhubTest.js",
-    "smoke": "node src/agent/index.js"
+    "smoke": "node src/agent/index.js",
+    "set-tools": "node scripts/setToolRecord.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

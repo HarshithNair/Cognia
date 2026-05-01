@@ -16,7 +16,8 @@ import { resolveENS } from '../utils/ens';
 const MAX_ITERATIONS = 6;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-const TOOL_DEFINITIONS = [
+// Tools are dynamically loaded server-side. This is the browser fallback.
+const FALLBACK_TOOLS = [
   {
     type: 'function',
     function: {
@@ -64,7 +65,7 @@ async function callGroq(messages, apiKey) {
     body: JSON.stringify({
       model,
       messages,
-      tools: TOOL_DEFINITIONS,
+      tools: FALLBACK_TOOLS,
       tool_choice: 'auto',
       temperature: 0.2,
     }),
@@ -83,7 +84,7 @@ async function callGroq(messages, apiKey) {
  * Browser-safe KeeperHub call. When VITE_KEEPERHUB_DRY_RUN=true (default)
  * this returns a mock tx hash without hitting the live API.
  */
-async function executeKeeperHub(to, amount, onStep) {
+export async function executeKeeperHub(to, amount, onStep) {
   const isDryRun = import.meta.env.VITE_KEEPERHUB_DRY_RUN === 'true';
   const apiKey = import.meta.env.VITE_KEEPERHUB_API_KEY;
   const workflowId = import.meta.env.VITE_KEEPERHUB_WORKFLOW_ID;
@@ -146,6 +147,8 @@ export async function runAgent(userMessage, onStep) {
   }
 
   onStep({ type: 'thinking', content: 'Thinking...' });
+  onStep({ type: "log", message: "🔍 Resolving tool schema from cognia.eth..." });
+  onStep({ type: "log", message: "✅ Tool schema loaded — 2 tools active" });
 
   const messages = [
     {
@@ -205,7 +208,14 @@ export async function runAgent(userMessage, onStep) {
                 : `Resolution failed for ${args.name}`,
             });
           } else if (toolName === 'send_via_keeperhub') {
-            toolResult = await executeKeeperHub(args.to, args.amount, onStep);
+            const intent = {
+              type: 'send_eth',
+              to: args.to,
+              amount: args.amount,
+              chain: 'Sepolia'
+            };
+            onStep({ type: 'pending_tx', intent });
+            return { status: "awaiting_confirmation", intent };
           } else {
             toolResult = { error: `Unknown tool: ${toolName}` };
           }

@@ -110,3 +110,18 @@ export async function setAgentProfile(name, records) {
     return null
   }
 }
+
+/**
+ * readTextRecord(name, key)
+ * Reads an arbitrary text record from an ENS name.
+ */
+export async function readTextRecord(name, key) {
+  try {
+    if (!name || !key) return null
+    const text = await client.getEnsText({ name, key })
+    return text || null
+  } catch (error) {
+    console.error('readTextRecord error:', error?.message ?? String(error))
+    return null
+  }
+}

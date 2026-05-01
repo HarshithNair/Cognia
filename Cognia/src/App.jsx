@@ -4,9 +4,10 @@ import Chat from './components/Chat';
 import ExecutionSteps from './components/ExecutionLogs';
 import Discover from './components/Discover';
 import About from './components/About';
-import { runAgent } from './agent/realAgent';
+import { runAgent, executeKeeperHub } from './agent/realAgent';
 import { resolveENS } from './utils/ens';
 import { getAgentProfile } from './utils/ensRecords';
+import TxProposalCard from './components/TxProposalCard';
 
 const TABS = ['Agent', 'Execution', 'Discover', 'About'];
 
@@ -15,6 +16,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [logs, setLogs] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [pendingTx, setPendingTx] = useState(null);
 
   // ENS state
   const [ensData, setEnsData] = useState(null);
@@ -105,24 +107,32 @@ function App() {
 
     // Progressive step callback — fired by realAgent on each Groq iteration / tool call
     const onStep = (step) => {
+      if (step.type === 'pending_tx') {
+        setPendingTx(step.intent);
+        return;
+      }
       // Replace the last 'thinking' bubble instead of stacking them
       if (step.type === 'thinking') {
         currentSteps = currentSteps.filter((s) => s.type !== 'thinking');
       }
-      currentSteps.push({ role: 'agent', type: step.type, content: step.content });
+      
+      const stepContent = step.content || step.message || '';
+      currentSteps.push({ role: 'agent', type: step.type, content: stepContent });
       updateSteps([...currentSteps]);
 
       // Mirror to execution log panel
-      if (step.type === 'ens' || step.content?.toLowerCase().includes('ens')) {
-        addLog('ENS', step.content);
-      } else if (step.type === 'tool' && step.content?.toLowerCase().includes('keeperhub')) {
-        addLog('KeeperHub', step.content);
+      if (step.type === 'ens' || stepContent.toLowerCase().includes('ens')) {
+        addLog('ENS', stepContent);
+      } else if (step.type === 'tool' && stepContent.toLowerCase().includes('keeperhub')) {
+        addLog('KeeperHub', stepContent);
       } else if (step.type === 'thinking') {
         addLog('Groq', 'Running Llama 3.3-70b');
       } else if (step.type === 'tool') {
-        addLog('Tool', step.content);
+        addLog('Tool', stepContent);
       } else if (step.type === 'error') {
-        addLog('Error', step.content);
+        addLog('Error', stepContent);
+      } else if (step.type === 'log') {
+        addLog('System', stepContent);
       }
     };
 
@@ -132,9 +142,14 @@ function App() {
 
       // Remove any lingering 'thinking' bubbles and show final result
       currentSteps = currentSteps.filter((s) => s.type !== 'thinking');
-      currentSteps.push({ role: 'agent', type: 'result', content: result });
-      updateSteps([...currentSteps]);
-      addLog('Result', 'Response generated');
+      if (result && result.status === 'awaiting_confirmation') {
+        updateSteps([...currentSteps]);
+        addLog('Result', 'Awaiting transaction confirmation');
+      } else {
+        currentSteps.push({ role: 'agent', type: 'result', content: result });
+        updateSteps([...currentSteps]);
+        addLog('Result', 'Response generated');
+      }
     } catch (err) {
       currentSteps = currentSteps.filter((s) => s.type !== 'thinking');
       currentSteps.push({ role: 'agent', type: 'error', content: err.message });
@@ -143,6 +158,44 @@ function App() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleConfirmTx = async () => {
+    if (!pendingTx) return;
+    
+    addLog('System', 'User confirmed transaction');
+    setMessages((prev) => [...prev, { role: 'agent', type: 'thinking', content: 'Executing transfer...' }]);
+    
+    const dummyOnStep = (step) => {
+      addLog(step.type === 'tool' ? 'KeeperHub' : 'System', step.content);
+    };
+
+    try {
+      const res = await executeKeeperHub(pendingTx.to, pendingTx.amount, dummyOnStep);
+      
+      setMessages((prev) => {
+        const filtered = prev.filter((m) => m.type !== 'thinking');
+        return [...filtered, {
+          role: 'agent',
+          type: 'result',
+          content: res.error ? `Transfer failed: ${res.error}` : `Transfer successful! TxHash: ${res.txHash}`
+        }];
+      });
+      addLog('Result', `Transfer executed: ${res.txHash}`);
+    } catch (err) {
+      setMessages((prev) => {
+        const filtered = prev.filter((m) => m.type !== 'thinking');
+        return [...filtered, { role: 'agent', type: 'error', content: err.message }];
+      });
+    } finally {
+      setPendingTx(null);
+    }
+  };
+
+  const handleRejectTx = () => {
+    addLog('System', 'User rejected transaction');
+    setMessages((prev) => [...prev, { role: 'agent', type: 'error', content: 'Transaction cancelled by user.' }]);
+    setPendingTx(null);
   };
 
   return (
@@ -187,6 +240,13 @@ function App() {
                 isProcessing={isProcessing || ensLoading}
                 onSendMessage={handleSendMessage}
               />
+              {pendingTx && (
+                <TxProposalCard 
+                  intent={pendingTx} 
+                  onConfirm={handleConfirmTx} 
+                  onReject={handleRejectTx} 
+                />
+              )}
             </div>
             <div className="right-col">
               <ExecutionSteps logs={logs} compact />
