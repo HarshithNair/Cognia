@@ -118,7 +118,7 @@ export async function runAgent(userMessage, tools) {
 
     try {
       response = await client.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
+        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
         messages,
         tools: TOOL_DEFINITIONS,
         tool_choice: "auto",

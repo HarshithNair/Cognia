@@ -40,10 +40,14 @@ export async function runAgent(message) {
 }
 
 // ─── Quick smoke test ─────────────────────────────────────────────────────────
-// Run directly:  node --experimental-vm-modules src/agent/index.js
-// (or via your bundler's test runner)
+// Run directly with:  node index.js
+import { fileURLToPath } from 'url'
+import path from 'path'
 
-if (import.meta.url === new URL(import.meta.url).href) {
+const __filename = fileURLToPath(import.meta.url)
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === __filename
+
+if (isMain) {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("AgentPass — smoke test");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

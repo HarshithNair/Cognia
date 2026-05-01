@@ -5,12 +5,16 @@
   "description": "AgentPass — Groq-powered Web3 agent brain (mocked tools for development).",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "node index.js"
+    "start": "node src/agent/index.js",
+    "test": "node test/ensTest.js && node test/keeperhubTest.js",
+    "test:ens": "node test/ensTest.js",
+    "test:keeperhub": "node test/keeperhubTest.js",
+    "smoke": "node src/agent/index.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "groq-sdk": "^1.0.0"
+    "groq-sdk": "^1.0.0",
+    "viem": "^2.48.4"
   },
   "engines": {
     "node": ">=18"
